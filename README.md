@@ -1,8 +1,8 @@
 # Speach2Pi
 
-Controle um Raspberry Pi falando. Você segura a barra de espaço, diz o que quer
-— *"quando eu apertar o botão, o LED pisca 3 vezes a 3 Hz"* — solta a tecla, e
-alguns segundos depois o Pi já está se comportando assim.
+Controle um robô Pololu Zumo 2040 falando. Você segura a barra de espaço, diz o que
+quer — *"anda para frente por dois segundos e depois gira para a direita"* — solta a
+tecla, e pouco depois o robô já está se comportando assim.
 
 Projeto de horas complementares (Insper).
 
@@ -16,22 +16,26 @@ Projeto de horas complementares (Insper).
 │                              prompt + instrução ─────────┘        │
 │                                        │                          │
 │                                        ▼                          │
-│                            LLM (Claude / GPT) ──▶ código Python   │
+│                       LLM (Claude / GPT) ──▶ código MicroPython   │
 │                                        │                          │
 └────────────────────────────────────────┼──────────────────────────┘
-                                         │ SSH / SFTP
+                                         │ USB (mpremote)
                                          ▼
-                      ┌────────── Raspberry Pi ──────────┐
-                      │  executa o script  ──▶ LED + botão │
-                      └────────────────────────────────────┘
+          ┌──────────── Pololu Zumo 2040 (RP2040) ────────────┐
+          │  executa o código ──▶ motores, LEDs, buzzer,       │
+          │                       display, botões e sensores   │
+          └────────────────────────────────────────────────────┘
 ```
 
 | Etapa | Arquivo |
 |---|---|
 | Captura de áudio pela barra de espaço | [host/recorder.py](host/recorder.py), [host/main.py](host/main.py) |
 | Áudio → texto | [host/transcribe.py](host/transcribe.py) |
-| Texto → código Python | [host/codegen.py](host/codegen.py), [prompts/system_prompt.md](prompts/system_prompt.md) |
-| Envio e execução no Pi | [host/deploy.py](host/deploy.py) |
+| Texto → código MicroPython | [host/codegen.py](host/codegen.py), [prompts/system_prompt.md](prompts/system_prompt.md) |
+| Envio e execução no Zumo | [host/deploy.py](host/deploy.py) |
+
+O código roda direto na memória do robô, sem alterar os arquivos dele: o botão de
+reset volta para o menu original da Pololu.
 
 ## Instalação (no computador)
 
@@ -42,10 +46,10 @@ pip install -r requirements.txt
 copy .env.example .env        # depois preencha as chaves de API
 ```
 
-## Raspberry Pi
+## Robô Pololu Zumo 2040
 
-Ver [pi/setup_pi.md](pi/setup_pi.md) — instalação do `gpiozero`, SSH por chave e
-esquema de ligação do LED e do botão.
+Ver [zumo/setup_zumo.md](zumo/setup_zumo.md) — conexão, energia, hardware disponível
+e teste do hardware.
 
 ## Uso
 
@@ -55,24 +59,24 @@ python host/main.py
 
 1. Segure **ESPAÇO** e fale a instrução
 2. Solte a tecla
-3. O código gerado aparece no terminal e já começa a rodar no Pi
-4. **ESC** encerra
+3. O código gerado aparece no terminal e já começa a rodar no Zumo
+4. Se o programa usa os motores, aperte o botão **A** do robô para ele começar a andar
+5. **ESC** para o robô e encerra
 
 ## Hardware
 
-| Componente | Pino (BCM) |
-|---|---|
-| LED (com resistor de 330 Ω) | 17 |
-| Botão (pull-up interno) | 27 |
-
-Configurável pelo `.env`.
+Tudo já vem no chassi do Zumo 2040: 2 motores com encoders, display OLED, 6 LEDs
+RGB, LED amarelo, buzzer, 3 botões, 5 sensores de linha, sensores de proximidade e
+IMU. Detalhes em [zumo/setup_zumo.md](zumo/setup_zumo.md).
 
 ## Segurança
 
-O código gerado por um LLM é executado no Raspberry Pi, então há duas barreiras:
-o *system prompt* restringe o que pode ser gerado, e `codegen.is_safe()` bloqueia
-padrões perigosos (`os`, `subprocess`, `eval`, `exec`…) antes do envio. O código é
-sempre impresso no terminal antes de rodar.
+O código gerado por um LLM é executado no robô, então há três barreiras: o
+*system prompt* restringe o que pode ser gerado (e exige apertar o botão A antes de
+mover os motores), `codegen.is_safe()` bloqueia padrões perigosos (`os`, `open`,
+`eval`, `exec`, `_thread`, `machine.reset`, `bootloader`…) antes do envio, e cada
+envio (e o ESC) desliga motores, LEDs e buzzer antes de qualquer outra coisa. O
+código é sempre impresso no terminal antes de rodar.
 
 ## Status
 
